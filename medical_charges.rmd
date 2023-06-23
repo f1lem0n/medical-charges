@@ -1,0 +1,359 @@
+---
+title: "Modelowanie kosztu ubezpieczenia zdrowotnego w USA na podstawie zbioru danych \"Medical Cost Personal Dataset\""
+author: "Filip Hajdyła, Jakub Czołowski"
+output: html_document
+date: "2023-05-22"
+---
+
+```{r setup, include=F}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 10,
+  fig.height = 10
+)
+```
+
+*dostępne na: [github](https://github.com/f1lem0n/medical-charges)*
+
+# Użyte biblioteki
+
+```{r lib}
+require("dplyr")
+require("ggplot2")
+require("GGally")
+require("MASS")
+require("cowplot")
+require("car")
+require("liver")
+```
+
+# Informacje wstępne
+
+Poniższe dane pochodzą z serwisu [Kaggle](https://www.kaggle.com/mirichoi0218/insurance/home)
+i przedstawiają dane dla małej próbki amerykańskiej populacji w zakresie kosztów
+ubezpieczenia zdrowotnego na podstawie kilku atrybutów opisanych w sekcji **Zawartość**.
+
+## Zawartość
+
+| zmienna  | opis                                                                                |
+| :------- | :---------------------------------------------------------------------------------- |
+| age      | wiek opłacającego ubezpieczenie                                                     |
+| sex      | płeć opłacającego ubezpieczenie                                                     |
+| bmi      | indeks masy ciała (Body Mass Index, BMI) ubezpieczonego                             |
+| children | liczba dzieci objętych tym samym ubezpieczeniem/liczba zależnych beneficjentów      |
+| smoker   | czy ubezpieczony jest palaczem?                                                     |
+| region   | okręg zamieszkania ubezpieczonego w USA: northeast, southeast, southwest, northwest |
+| charges  | koszty ubezpieczenia                                                                |
+
+*źródło: [github](https://gist.github.com/meperezcuello/82a9f1c1c473d6585e750ad2e3c05a41)*
+
+## Problem
+
+Celem było stworzenie najlepszego modelu, który na podstawie podanych zmiennych umożliwiłby wymodelowanie kosztu ubezpieczenia. Następnie należało sprawdzić, które zmienne mają największy wpływ na model i uprościć go, koncentrując się głównie na tych zmiennych.
+
+# Analiza
+
+## Import i wstępna wizualizacja danych
+
+```{r}
+df <- read.csv("data/mcp.txt", stringsAsFactors = T)
+head(df)
+n <- length(df$charges)
+
+df %>%
+  ggpairs(aes(color = sex, alpha = 0.7),
+    upper = list(continuous = wrap("cor", size = 2.5))
+  ) +
+  theme(
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank()
+  )
+```
+
+```{r}
+str(df)
+summary(df)
+```
+
+Wśród danych znajdują się zmienne kategorialne: sex, smoker i region, które posiadają odpowiednio 2, 2 i 4 kategorie. Pozostałe zmienne są to zmienne numeryczne. Powyżej przedstawione są wykresy, które pokazują zależności między każdą zmienną a pozostałymi zmiennymi. W zależności od typu danych wykorzystuje się różne rodzaje wykresów. Jeśli mamy do czynienia z dwoma zmiennymi numerycznymi, stosuje się wykres korelacji, natomiast w przypadku zmiennej numerycznej kontra kategorialna korzysta się z wykresu pudełkowego. Histogramy pokazują rozkład danej cechy. Podstawowe statystyki dla danych kategorialnych pokazują, że w przypadku zmiennej `smoker` dane są niezbalansowane, ale są zrównoważone w przypadku pozostałych zmiennych kategorialnych. Zmienne numeryczne nie wykazują znaczących odchyleń w statystykach podstawowych. Średnia i mediana są na podobnym poziomie, a kwantyle są równomiernie rozmieszczone. Jedynie zmienna charges wykazuje skośność i przesunięcie w lewo, co oznacza, że ma tendencję do przyjmowania niższych wartości, ale jednocześnie posiada ciężki ogon dla wartości wysokich.
+
+## Histogramy i wykresy pudełkowe cech numerycznych
+
+```{r}
+hist.age <- ggplot(data = df, aes(age)) +
+  geom_histogram()
+
+hist.bmi <- ggplot(data = df, aes(bmi)) +
+  geom_histogram()
+
+hist.children <- ggplot(data = df, aes(children)) +
+  geom_histogram(bins = 5)
+
+hist.charges <- ggplot(data = df, aes(charges)) +
+  geom_histogram()
+
+plot_grid(hist.age, hist.bmi, hist.children, hist.charges, labels = "auto", align = "hv")
+```
+
+```{r}
+box.age <- ggplot(data = df, aes(age)) +
+  geom_boxplot(outlier.colour = "red", outlier.alpha = 0.5) +
+  coord_flip() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+box.bmi <- ggplot(data = df, aes(bmi)) +
+  geom_boxplot(outlier.colour = "red", outlier.alpha = 0.5) +
+  coord_flip() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+box.children <- ggplot(data = df, aes(children)) +
+  geom_boxplot(outlier.colour = "red", outlier.alpha = 0.5) +
+  coord_flip() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+box.charges <- ggplot(data = df, aes(charges)) +
+  geom_boxplot(outlier.colour = "red", outlier.alpha = 0.5) +
+  coord_flip() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+plot_grid(box.age, box.bmi, box.children, box.charges, labels = "auto", align = "hv")
+```
+
+Zarówno histogramy, jak i wykresy pudełkowe pozwalają nam zobaczyć rozkład danych numerycznych. Na podstawie tych wykresów można wnioskować, że zmienne `children` i `charges` prawdopodobnie mają rozkład Poissona, z kolei zmienna age wykazuje cechy rozkładu jednostajnego. Natomiast zmienna BMI prawdopodobnie ma rozkład normalny, choć na wykresie pudełkowym można zauważyć wydłużony ogon w kierunku wyższych wartości, co może wpływać na percepcję danych.
+
+## Korelacja między zmiennymi numerycznymi
+
+```{r}
+age.v.bmi <- ggplot(data = df, aes(age, bmi, color = sex)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  geom_smooth(color = "red", fill = "blue") +
+  ggtitle(sprintf("r = %.4f", cor(df$age, df$bmi))) +
+  theme(legend.position = "none")
+
+age.v.children <- ggplot(data = df, aes(age, children, color = sex)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  ggtitle(sprintf("r = %.4f", cor(df$age, df$children))) +
+  theme(legend.position = "none")
+
+age.v.charges <- ggplot(data = df, aes(age, charges, color = sex)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  ggtitle(sprintf("r = %.4f", cor(df$age, df$charges))) +
+  theme(legend.position = "none")
+
+children.v.bmi <- ggplot(data = df, aes(children, bmi, color = sex)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  ggtitle(sprintf("r = %.4f", cor(df$children, df$bmi))) +
+  theme(legend.position = "none")
+
+children.v.charges <- ggplot(data = df, aes(children, charges, color = sex)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  ggtitle(sprintf("r = %.4f", cor(df$children, df$charges))) +
+  theme(legend.position = "none")
+
+charges.v.bmi <- ggplot(data = df, aes(charges, bmi, color = sex)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  ggtitle(sprintf("r = %.4f", cor(df$charges, df$bmi)))
+
+plot_grid(age.v.bmi, age.v.children, age.v.charges, children.v.bmi,
+  align = "hv",
+  children.v.charges, charges.v.bmi, labels = "auto", ncol = 2
+)
+```
+
+Zbadano korelację między danymi numerycznymi w celu sprawdzenia, czy istnieje jakakolwiek zależność między nimi. Jak można zauważyć na powyższych wykresach, żadne z danych numerycznych nie wykazuje istotnej korelacji. Jednak na niektórych wykresach można dostrzec wyodrębnione grupy. Na przykład na wykresie `charges` w zależności od age można zaobserwować trzy linie, co sugeruje istnienie trzech populacji osób, które, niezależnie od wieku, płacą określone poziomy składek. Obserwuje się również pewną korelację, gdzie wraz z wiekiem wzrasta wysokość składek, ale słaby współczynnik korelacji może wynikać z obecności dwóch populacji powyżej pierwszej. Również na wykresie `bmi` w zależności od `charges` można zauważyć wyodrębnienie dwóch populacji, gdzie dla wyższych składek populacja ma wyższe wartości `bmi`. To sugeruje, że zachowanie się danych różni się dla wyższych i niższych składek, co może utrudniać określenie jednego trendu dla wszystkich danych.
+
+## Model liniowy
+
+```{r}
+# liniowy zgeneralizowany
+df.lm1 <- lm(charges ~ ., data = df)
+summary(df.lm1)
+
+# wykresy diagnostyczne
+par(mfrow = c(2, 2))
+plot(df.lm1, pch = 16)
+```
+
+Następnie przystąpiono do utworzenia modelu liniowego, uwzględniającego wszystkie dostępne dane. Wartość współczynnika determinacji $R2$ nie jest wystarczająca, ale nie jest również najgorsza.
+
+Wykres Residuals vs Fitted, przedstawiający na osi $X$ wartości dopasowane, a na osi $Y$ różnice między wartościami dopasowanymi a przewidywanymi, ukazuje istnienie trzech populacji. Prawdopodobnie istnieje czynnik nieuwzględniony w danych, który odpowiada za ten stan rzeczy. Dopasowanie danych dla niższych wartości `charges` jest znacznie lepsze niż dla wyższych, gdzie obserwuje się przeszacowanie lub niedoszacowanie.
+
+Wykres Normal Q-Q wyraźnie odbiega od rozkładu normalnego, ponieważ dane w wąskim zakresie osadzone są wzdłuż linii. Krzywa odchylona ku górze po prawej stronie wykresu wskazuje na wysoką liczbę dużych wartości skrajnych lub prawoskośność.
+
+Wykres skali i lokalizacji ponownie ujawnia obecność dwóch populacji. Dla niższych wartości `charges` dane są rozproszone wokół linii, ale można również zauważyć wiele punktów odstających. Natomiast druga populacja znajduje się wyżej na wykresie, co wskazuje na nieodpowiednie dopasowanie modelu dla wyższych wartości, gdzie przewidywane wartości znacznie różnią się od rzeczywistych.
+
+Ostatni z czterech wykresów ponownie ukazuje trzy populacje, choć nie jest to oczywiste i występuje wiele wartości odstających.
+
+```{r}
+# obserwacje wplywowe i odstajace
+par(mfrow = c(1, 2))
+cutoff <- 4 / (n - length(df.lm1$coefficients) - 2)
+influencePlot(df.lm1, fill.alpha = 1, fill.col = "red")
+plot(df.lm1, which = 4, cook.levels = cutoff, lwd = 2)
+abline(h = cutoff, col = "red", lty = 2, lwd = 2)
+```
+
+W celu wykrycia obserwacji odstających i wpływowych zastosowano następujące parametry:
+
+- **Studentized residuals:** służy do oceny, czy dana obserwacja jest wartością odstającą pod względem reszt. Im większa wartość bezwzględna studentized residuals, tym bardziej odstająca jest dana obserwacja.
+
+- **Hat-values:** określają wpływ poszczególnych obserwacji na dopasowanie modelu. Przyjmują wartości między 0 a 1, gdzie wartości bliższe 1 oznaczają większy wpływ.
+
+- **Cook's D:** miara wpływu obserwacji na dopasowanie modelu regresji oraz na wartości estymowanych parametrów. Wartość progu krytycznego dla Cook's D, oznaczanego jako cutoff, jest ustalana na podstawie wzoru $\mathrm{cutoff} = \frac{4}{(n - p - 2)}$, gdzie $n$ to liczba obserwacji w danych, a $p$ to liczba parametrów (współczynników) w modelu regresji, wliczając w to wyraz wolny.
+
+Analiza wskazuje na istnienie wielu obserwacji, które potencjalnie mogą być uznane za odstające, co jest zgodne z wcześniejszymi wykresami.
+
+```{r}
+df.lm1.AIC <- AIC(df.lm1)
+df.lm1.AIC
+```
+
+$AIC$ uwzględnia zarówno dopasowanie modelu do danych, jak i złożoność modelu, dążąc do znalezienia równowagi między tymi dwoma czynnikami. Jego celem jest wybór modelu, który dobrze uogólnia dane, minimalizując jednocześnie złożoność modelu. Dlatego właśnie wybraliśmy $AIC$ jako miarę oceny naszego modelu. Im mniejsza wartość $AIC$, tym lepsze dopasowanie modelu, stąd widać, że powyższy model nie jest najlepszym dopasowaniem.
+
+Następnie skonstruowano nowy model, uwzględniając liczbę predyktorów równą liczbie współczynników (coefficients) o najniższych wartościach $p$ (ozn. ***).
+
+```{r}
+df.lm2 <- lm(charges ~ age + bmi + children + smoker, data = df)
+summary(df.lm2)
+
+par(mfrow = c(2, 2))
+plot(df.lm2, pch = 16)
+
+par(mfrow = c(1, 2))
+cutoff <- 4 / (n - length(df.lm2$coefficients) - 2)
+influencePlot(df.lm2, fill.alpha = 1, fill.col = "red")
+plot(df.lm2, which = 4, cook.levels = cutoff, lwd = 2)
+abline(h = cutoff, col = "red", lty = 2, lwd = 2)
+
+# czy jest roznica miedzy tymi modelami?
+df.lm2.AIC <- AIC(df.lm2)
+df.lm2.AIC
+anova(df.lm1, df.lm2)
+```
+
+Korelacje, wykresy, wyniki oraz ocena modelu praktycznie nie uległy zmianie. Ponieważ nie było istotnej różnicy między modelami, pozostano przy modelu prostszym (`df.lm2`).
+
+## Transformacje zmiennych
+
+Zdecydowano się więc przeprowadzić transformację zmiennych. W tym celu najpierw sprawdzono, czy dane numeryczne, które uwzględniliśmy w modelu (z wyjątkiem zmiennej smoker), mają rozkład normalny.
+
+```{r}
+shapiro.test(df$age)
+shapiro.test(df$bmi)
+shapiro.test(df$children)
+```
+
+Okazało się, że żadna z tych zmiennych nie spełniała tego warunku, co potwierdziła również wcześniejsza analiza histogramów oraz wykresów pudełkowych.
+
+Przeprowadzono transformację Boxa-Coxa w celu znalezienia optymalnej wartości $\lambda$, która pozwoliłaby przekształcić dane tak, aby przybliżyć je do rozkładu normalnego.
+
+```{r}
+age.fit <- boxCox(lm(age ~ 1, data = df))
+age.lambda <- age.fit$x[which.max(age.fit$y)]
+age.lambda
+df$age.boxcox <- (df$age^age.lambda - 1) / age.lambda
+
+bmi.fit <- boxCox(lm(bmi ~ 1, data = df))
+bmi.lambda <- bmi.fit$x[which.max(bmi.fit$y)]
+bmi.lambda
+df$bmi.boxcox <- (df$bmi^bmi.lambda - 1) / bmi.lambda
+
+children.fit <- boxCox(lm(children + 1 ~ 1, data = df))
+children.lambda <- children.fit$x[which.max(children.fit$y)]
+children.lambda
+df$children.boxcox <- ((df$children + 1)^children.lambda - 1) / children.lambda
+```
+
+Następnie sprawdzono, czy dopasowane $\lambda$ wpłynęło na zmianę rozkładu danych.
+
+```{r}
+shapiro.test(df$age.boxcox)
+shapiro.test(df$bmi.boxcox)
+shapiro.test(df$children.boxcox)
+
+hist.age.boxcox <- ggplot(data = df, aes(age.boxcox)) +
+  geom_histogram()
+
+hist.bmi.boxcox <- ggplot(data = df, aes(bmi.boxcox)) +
+  geom_histogram()
+
+hist.children.boxcox <- ggplot(data = df, aes(children.boxcox)) +
+  geom_histogram(bins = 5)
+
+plot_grid(hist.age.boxcox, hist.bmi.boxcox, hist.children.boxcox, labels = "auto", align = "hv")
+```
+
+Rezultaty pokazały, że transformacja była możliwa jedynie dla zmiennej `bmi`, zatem zbudowano kolejny model uwzględniający transformowane `bmi`.
+
+```{r}
+df.lm3 <- lm(charges ~ age + bmi.boxcox + children + smoker, data = df)
+summary(df.lm3)
+par(mfrow = c(2, 2))
+plot(df.lm3, pch = 16)
+
+par(mfrow = c(1, 2))
+cutoff <- 4 / (n - length(df.lm3$coefficients) - 2)
+influencePlot(df.lm3, fill.alpha = 1, fill.col = "red")
+plot(df.lm3, which = 4, cook.levels = cutoff, lwd = 2)
+abline(h = cutoff, col = "red", lty = 2, lwd = 2)
+
+df.lm3.AIC <- AIC(df.lm3)
+df.lm3.AIC
+anova(df.lm2, df.lm3)
+```
+
+Ten model nie różni się od poprzednich.
+
+## Obserwacje odstające i wpływowe
+
+We wszystkich 3 modelach widać było wiele obserwacji przekraczających dystans Cooka.
+
+```{r}
+outlierTest(df.lm3)
+```
+
+```{r}
+infl <- influence.measures(df.lm3)$is.inf
+data.frame(infl) %>%
+  mutate(isINF = if_any()) %>%
+  filter(isINF == T) %>%
+  length()
+```
+
+Wykazano, że w ostatnim modelu mniej jest obserwacji odstających, jednak aż 10 wpływowych.
+
+## Porównanie modeli
+
+```{r}
+model <- c("df.lm1", "df.lm2", "df.lm3")
+AIC.scores <- c(df.lm1.AIC, df.lm2.AIC, df.lm3.AIC)
+ggplot() +
+  geom_col(aes(x = model, y = AIC.scores))
+```
+
+Powyższy wykres pokazuje, że nie zaobserwowano różnicy między ocenami modeli, dlatego wybrano model najprostszy, z najmniejszą liczbą zmiennych oraz brakiem transformowanych danych.
+
+# Wnioski i dyskusja
+
+Analizując dane, można zauważyć, że mimo intuicyjnego przekonania, nie ma istotnej zależności między zmiennymi a wysokością ubezpieczenia. Nawet zmienna `bmi`, która pierwotnie sugerowała podział danych na dwie populacje, przy bardziej zaawansowanym modelowaniu nie wykazuje istotnej korelacji. Widoczne są jednak wyraźne subpopulacje (np. 3 na wykresie `age` vs `charges`), co sugeruje, że istnieje pewna zależność od zmiennej, która nie została uwzględniona w analizie, być może związana z historią klienta. W każdym przypadku, precyzyjne modelowanie składki na podstawie dostępnych danych jest trudne, chyba że podzielimy klientów na konkretne grupy, co pozwoliłoby na bardziej dokładne przewidywanie składek dla poszczególnych klientów w każdej z tych grup. Jednak nie jest jasne, jak dokładnie podzielić klientów na grupy, oprócz samego wyniku, który jest obecnie modelowany. Przewidywania są dokładne tylko dla niższych składek, czyli dla większej populacji klientów.
