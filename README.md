@@ -1,3 +1,7 @@
+![](https://img.shields.io/badge/language-R-blue.svg)
+![](https://img.shields.io/badge/license-apache_2.0-000000.svg)
+![](https://progress-bar.dev/100)
+
 # US Medical charges modelling
 
 This is a [kaggle competition](https://www.kaggle.com/datasets/mirichoi0218/insurance) project.
