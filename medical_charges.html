@@ -938,21 +938,22 @@ zmiennych oraz brakiem transformowanych danych.</p>
 </div>
 <div id="wnioski-i-dyskusja" class="section level1">
 <h1>Wnioski i dyskusja</h1>
-<p>Analizując dane, można zauważyć, że mimo intuicyjnego przekonania,
-nie ma istotnej zależności między zmiennymi a wysokością ubezpieczenia.
-Nawet zmienna <code>bmi</code>, która pierwotnie sugerowała podział
-danych na dwie populacje, przy bardziej zaawansowanym modelowaniu nie
-wykazuje istotnej korelacji. Widoczne są jednak wyraźne subpopulacje
-(np. 3 na wykresie <code>age</code> vs <code>charges</code>), co
-sugeruje, że istnieje pewna zależność od zmiennej, która nie została
-uwzględniona w analizie, być może związana z historią klienta. W każdym
-przypadku, precyzyjne modelowanie składki na podstawie dostępnych danych
-jest trudne, chyba że podzielimy klientów na konkretne grupy, co
-pozwoliłoby na bardziej dokładne przewidywanie składek dla
-poszczególnych klientów w każdej z tych grup. Jednak nie jest jasne, jak
-dokładnie podzielić klientów na grupy, oprócz samego wyniku, który jest
-obecnie modelowany. Przewidywania są dokładne tylko dla niższych
-składek, czyli dla większej populacji klientów.</p>
+<p>Przeprowadzona analiza wykazała, że istnieje istotny związek pomiędzy
+zmiennymi <code>age</code>, <code>bmi</code> <code>children</code> oraz
+<code>smoker</code> a wysokością opłacanej składki ubezpieczeniowej.
+Zmienna <code>region</code> nie wpływa na wysokość składki. Wydaje się,
+że zmienna <code>sex</code> wpływa na wysokość składki, ale nie jest
+istotna statystycznie. W danych widoczne są wyraźne subpopulacje (np. 3
+na wykresie <code>age</code> vs <code>charges</code>), co sugeruje, że
+istnieje pewna zależność od zmiennej, która nie została uwzględniona w
+analizie, być może związana z historią klienta. W każdym przypadku,
+precyzyjne modelowanie składki na podstawie dostępnych danych jest
+trudne, chyba że podzielimy klientów na konkretne grupy, co pozwoliłoby
+na bardziej dokładne przewidywanie składek dla poszczególnych klientów w
+każdej z tych grup. Jednak nie jest jasne, jak dokładnie podzielić
+klientów na grupy, oprócz samego wyniku, który jest obecnie modelowany.
+Przewidywania są dokładne tylko dla niższych składek, czyli dla większej
+populacji klientów.</p>
 </div>
 
 
