@@ -1,7 +1,7 @@
 # US Medical charges modelling
 
 This is a [kaggle competition](https://www.kaggle.com/datasets/mirichoi0218/insurance) project.
-The goal is to find the best model for predicting wether titanic passenger survived the catastrophe.
+The goal is to find the best model for predicting medical charges based on given personal features.
 For this task we have cleaned and preprocessed the data and then used **Linear Regression** to model
 and predict `charges` .
 
